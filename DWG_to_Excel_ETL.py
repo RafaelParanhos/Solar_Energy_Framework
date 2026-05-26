@@ -109,7 +109,10 @@ def debug_dxf_coordinates(dxf_path):
             print("---")
 
 def load_to_duckdb(dxf_path, project_name):
-    ''' Loads PV project into main database '''
+    '''
+    Loads PV project into main database
+    If there is already data from the pv_project, it deletes old data and adds the new as there is no need to maintain old data.
+    '''
 
     conn = duckdb.connect("pv_projects.duckdb")
 
@@ -120,8 +123,30 @@ def load_to_duckdb(dxf_path, project_name):
     df['ingestion_timestamp'] = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
     conn.register("df_temp", df)
-    conn.execute("CREATE TABLE IF NOT EXISTS cad_entities AS SELECT * FROM df_temp")
+    conn.execute("CREATE TABLE IF NOT EXISTS cad_entities AS SELECT * FROM df_temp WHERE 1=0")
+
+    conn.execute("BEGIN TRANSACTION")
+
+    try:
+        existing = conn.execute("SELECT COUNT(DISTINCT project_name) FROM cad_entities WHERE project_name = ?", [project_name]).fetchone()[0]
+        print(existing)
+        if existing > 0:
+            print(f"Project {project_name} already exists")
+            conn.execute("DELETE FROM cad_entities WHERE project_name = ?", [project_name])
+            print(f"Removed existing data for project: {project_name}")
+
+
+        conn.execute("INSERT INTO cad_entities SELECT * FROM df_temp")
+
+        conn.execute("COMMIT")
+        print("Successfully loaded project")
+
+    except Exception as e:
+        conn.execute("ROLLBACK")
+        print(f"Failed to load project: {project_name}: {e}")
+        raise
 
     print(f"Loaded {len(df)} entities for project: {project_name}")
+    print("Don't forget to close connection.")
 
     return conn
