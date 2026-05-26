@@ -3,6 +3,8 @@ import pandas as pd
 import subprocess
 import ezdxf
 from ezdxf.math import Vec3
+import duckdb
+import datetime
 
 def convert_dwg_to_dxf(dwg_folder, output_folder):
     oda_path = r"C:\Program Files\ODA\ODAFileConverter 27.1.0\ODAFileConverter.exe"
@@ -106,19 +108,20 @@ def debug_dxf_coordinates(dxf_path):
             print(f"Extrusion: {entity.dxf.extrusion}")
             print("---")
 
-def load_to_duckdb(dxf_path, db_path="solar_design.duckdb"):
+def load_to_duckdb(dxf_path, project_name):
+    ''' Loads PV project into main database '''
+
+    conn = duckdb.connect("pv_projects.duckdb")
+
     data = extract_data_from_dxf(dxf_path)
     df = pd.DataFrame(data)
-    conn = duckdb.connect(db_path)
 
-    conn.execute("DROP TABLE IF EXISTS cad_entities")
+    df['project_name'] = project_name
+    df['ingestion_timestamp'] = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
     conn.register("df_temp", df)
-    conn.execute("CREATE TABLE raw_entities AS SELECT * FROM df_temp")
+    conn.execute("CREATE TABLE IF NOT EXISTS cad_entities AS SELECT * FROM df_temp")
 
-    conn.execute("ALTER TABLE cad_entities ADD COLUMN id INTEGER")
-    conn.execute("ALTER TABLE raw_entities ADD COLUMN ingestion_timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP")
-    conn.execute("ALTER TABLE cad_entities ADD COLUMN source_file VARCHAR")
-    conn.execute(f"UPDATE cad_entities SET source_file = '{db_path}'")
+    print(f"Loaded {len(df)} entities for project: {project_name}")
 
-    conn.close()
-    print(f"Loaded {len(df)} entities from {db_path}")
+    return conn
