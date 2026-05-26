@@ -89,9 +89,6 @@ def save_to_excel(data, output_file):
     data_df = pd.DataFrame(data)
     data_df.drop(columns=['type','handle'], inplace=True, errors='ignore')
 
-
-
-
     with pd.ExcelWriter(output_file) as writer:
         data_df.to_excel(writer, sheet_name="Trench Lengths")
         data_df.groupby(by="layer").sum().to_excel(writer, sheet_name="Total Lengths")
@@ -122,8 +119,55 @@ def load_to_duckdb(dxf_path, project_name):
     df['project_name'] = project_name
     df['ingestion_timestamp'] = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
+    all_columns = [
+        'project_name', 'type', 'layer', 'handle', 'name',
+        'start_x', 'start_y', 'end_x', 'end_y', 'length',
+        'center_x', 'center_y', 'radius', 'major_radius',
+        'X', 'Y', 'rotation',
+        'PRK', 'UFV', 'PST', 'INV', 'EFX', 'STR', 'GRP',
+        'QBT', 'DSJ', 'PVM',
+        'ingestion_timestamp'
+    ]
+
+    for col in all_columns:
+        if col not in df.columns:
+            df[col] = None
+
+    df = df[all_columns]
+
     conn.register("df_temp", df)
-    conn.execute("CREATE TABLE IF NOT EXISTS cad_entities AS SELECT * FROM df_temp WHERE 1=0")
+    conn.execute("""
+                CREATE TABLE IF NOT EXISTS cad_entities (
+                    project_name VARCHAR,
+                    type VARCHAR,
+                    layer VARCHAR,
+                    handle VARCHAR,
+                    name VARCHAR,
+                    start_x FLOAT,
+                    start_y FLOAT,
+                    end_x FLOAT,
+                    end_y FLOAT,
+                    length FLOAT,
+                    center_x FLOAT,
+                    center_y FLOAT,
+                    radius FLOAT,
+                    major_radius FLOAT,
+                    X FLOAT,
+                    Y FLOAT,
+                    rotation FLOAT,
+                    PRK VARCHAR,
+                    UFV VARCHAR,
+                    PST VARCHAR,
+                    INV VARCHAR,
+                    EFX VARCHAR,
+                    STR VARCHAR,
+                    GRP VARCHAR,
+                    QBT VARCHAR,
+                    DSJ VARCHAR,
+                    PVM VARCHAR,
+                    ingestion_timestamp TIMESTAMP
+                )
+                 """)
 
     conn.execute("BEGIN TRANSACTION")
 
