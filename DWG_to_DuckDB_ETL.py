@@ -173,7 +173,6 @@ def load_to_duckdb(dxf_path, project_name):
 
     try:
         existing = conn.execute("SELECT COUNT(DISTINCT project_name) FROM cad_entities WHERE project_name = ?", [project_name]).fetchone()[0]
-        print(f"Prints 1 if the project already exists or 0 if it doesn't: {existing}")
         if existing > 0:
             print(f"Project {project_name} already exists")
             conn.execute("DELETE FROM cad_entities WHERE project_name = ?", [project_name])
