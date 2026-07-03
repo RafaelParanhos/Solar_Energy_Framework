@@ -1,8 +1,11 @@
-from DWG_to_Excel_ETL import *
+from DWG_to_DuckDB_ETL import *
 import os
 from datetime import datetime
 
 def weekly_extraction_job():
+    '''
+    Extraction function for LV trenches from PV Riodades.
+    '''
     dwg_folder = r"C:\Users\Usuario\Ecotechnee\Office - Documentos\Projetos\309 - Zagope - UVF Riodades\01 - Projetos\01 - Em Confecção\02 - Edição\01 - Layout\BT - 17.03.26"
     output_folder = os.path.join(dwg_folder, "output")
 
@@ -39,20 +42,20 @@ def weekly_extraction_job():
             dxf_path = os.path.join(output_folder, dxf_file)
             xlsx_path = os.path.join(output_timestamped_folder, f"{dxf_file[:-4]}_{timestamp}.xlsx")
 
-            # Step 2
-
-
-            # Step 3
+            # Step 1 - Error handling
             if not os.path.exists(dxf_path):
                 raise Exception(f" DXF file {dxf_path} not created.")
 
-            # Step 4
-            data = extract_data_from_dwf(dxf_path)
+            # Step 2 - Creating the DataFrame
+            data = extract_data_from_dxf(dxf_path)
 
-            # Step 5
+            # Step 3 - Saving the data to Excel
             save_to_excel(data, xlsx_path)
 
-            # Step 6
+            # Step 4 - Loading the data into Duckdb
+            load_to_duckdb(dxf_path, 'PV Riodades - Trenches')
+
+            # Step 5 - Cleanup
             os.remove(dxf_path)
 
             processed_count += 1
