@@ -126,7 +126,7 @@ def load_to_duckdb(dxf_path, project_name, rewrite=True):
         'X', 'Y', 'rotation',
         'PRK', 'UFV', 'PST', 'INV', 'EFX', 'STR', 'GRP',
         'QBT', 'DSJ', 'PVM',
-        '#-ESTRU.(PLANTA)', 'TIP.ESTRU.(PLANTA)', 'H/CAP.(PLANTA)', 'V.XXXX-XX(PLANTA)'
+        'TIP.ESTRU.(PLANTA)', 'H/CAP.(PLANTA)', 'V.XXXX-XX(PLANTA)'
         'ingestion_timestamp'
     ]
 
@@ -166,7 +166,6 @@ def load_to_duckdb(dxf_path, project_name, rewrite=True):
                     QBT VARCHAR,
                     DSJ VARCHAR,
                     PVM VARCHAR,
-                    #-ESTRU.(PLANTA) VARCHAR,
                     TIP.ESTRU.(PLANTA) VARCHAR,
                     H/CAP.(PLANTA) VARCHAR,
                     V.XXXX-XX(PLANTA) VARCHAR,
