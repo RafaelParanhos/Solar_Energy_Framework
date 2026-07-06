@@ -105,7 +105,7 @@ def debug_dxf_coordinates(dxf_path):
             print(f"Extrusion: {entity.dxf.extrusion}")
             print("---")
 
-def load_to_duckdb(dxf_path, project_name):
+def load_to_duckdb(dxf_path, project_name, rewrite=True):
     '''
     Loads PV project into main database
     If there is already data from the pv_project, it deletes old data and adds the new as there is no need to maintain old data.
@@ -173,10 +173,13 @@ def load_to_duckdb(dxf_path, project_name):
 
     try:
         existing = conn.execute("SELECT COUNT(DISTINCT project_name) FROM cad_entities WHERE project_name = ?", [project_name]).fetchone()[0]
-        if existing > 0:
+        if existing > 0 and rewrite:
             print(f"Project {project_name} already exists")
             conn.execute("DELETE FROM cad_entities WHERE project_name = ?", [project_name])
             print(f"Removed existing data for project: {project_name}")
+        elif existing == 0 and not rewrite:
+            print(f"Project {project_name} already exists")
+            print(f"Inserting more data for project: {project_name}")
 
 
         conn.execute("INSERT INTO cad_entities SELECT * FROM df_temp")
