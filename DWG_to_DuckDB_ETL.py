@@ -126,13 +126,16 @@ def load_to_duckdb(dxf_path, project_name, rewrite=True):
         'X', 'Y', 'rotation',
         'PRK', 'UFV', 'PST', 'INV', 'EFX', 'STR', 'GRP',
         'QBT', 'DSJ', 'PVM',
-        'TIP.ESTRU.(PLANTA)', 'H/CAP.(PLANTA)', 'V.XXXX-XX(PLANTA)'
         'ingestion_timestamp'
     ]
 
     for col in all_columns:
         if col not in df.columns:
             df[col] = None
+
+    if 'ITS' in df.columns and 'PST' in df.columns:
+        # Fill PST with ITS values where PST is null/empty
+        df['PST'] = df['PST'].fillna(df['ITS'])
 
     df = df[all_columns]
 
@@ -166,9 +169,6 @@ def load_to_duckdb(dxf_path, project_name, rewrite=True):
                     QBT VARCHAR,
                     DSJ VARCHAR,
                     PVM VARCHAR,
-                    TIP.ESTRU.(PLANTA) VARCHAR,
-                    H/CAP.(PLANTA) VARCHAR,
-                    V.XXXX-XX(PLANTA) VARCHAR,
                     ingestion_timestamp TIMESTAMP
                 )
                  """)
