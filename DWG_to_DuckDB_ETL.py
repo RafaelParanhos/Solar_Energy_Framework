@@ -124,7 +124,7 @@ def load_to_duckdb(dxf_path, project_name, rewrite=True):
         'project_name', 'type', 'layer', 'handle', 'name',
         'start_x', 'start_y', 'end_x', 'end_y', 'length',
         'center_x', 'center_y', 'radius', 'major_radius',
-        'X', 'Y', 'rotation', 'color'
+        'X', 'Y', 'rotation', 'color',
         'PRK', 'UFV', 'PST', 'INV', 'EFX', 'STR', 'GRP',
         'QBT', 'DSJ', 'PVM',
         'ingestion_timestamp'
@@ -160,7 +160,7 @@ def load_to_duckdb(dxf_path, project_name, rewrite=True):
                     X FLOAT,
                     Y FLOAT,
                     rotation FLOAT,
-                    color VARCHAR
+                    color VARCHAR,
                     PRK VARCHAR,
                     UFV VARCHAR,
                     PST VARCHAR,
