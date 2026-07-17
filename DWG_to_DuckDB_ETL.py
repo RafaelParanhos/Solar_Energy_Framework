@@ -124,10 +124,11 @@ def load_to_duckdb(dxf_path, project_name, rewrite=True):
         'project_name', 'type', 'layer', 'handle', 'name',
         'start_x', 'start_y', 'end_x', 'end_y', 'length',
         'center_x', 'center_y', 'radius', 'major_radius',
-        'X', 'Y', 'rotation', 'color',
+        'X', 'Y', 'rotation',
         'PRK', 'UFV', 'PST', 'INV', 'EFX', 'STR', 'GRP',
         'QBT', 'DSJ', 'PVM',
-        'ingestion_timestamp'
+        'ingestion_timestamp',
+        'color'
     ]
 
     for col in all_columns:
@@ -160,7 +161,6 @@ def load_to_duckdb(dxf_path, project_name, rewrite=True):
                     X FLOAT,
                     Y FLOAT,
                     rotation FLOAT,
-                    color VARCHAR,
                     PRK VARCHAR,
                     UFV VARCHAR,
                     PST VARCHAR,
@@ -171,7 +171,8 @@ def load_to_duckdb(dxf_path, project_name, rewrite=True):
                     QBT VARCHAR,
                     DSJ VARCHAR,
                     PVM VARCHAR,
-                    ingestion_timestamp TIMESTAMP
+                    ingestion_timestamp TIMESTAMP,
+                    color VARCHAR
                 )
                  """)
 
