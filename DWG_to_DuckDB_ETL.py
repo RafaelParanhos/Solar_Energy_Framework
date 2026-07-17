@@ -73,6 +73,7 @@ def extract_data_from_dxf(dxf_path):
             entity_data['X'] = entity.dxf.insert.x
             entity_data['Y'] = entity.dxf.insert.y
             entity_data['rotation'] = entity.dxf.rotation
+            entity_data['color'] = entity.dxf.color
             for attrib in entity.attribs:
                 entity_data[f'{attrib.dxf.tag}'] = attrib.dxf.text
 
