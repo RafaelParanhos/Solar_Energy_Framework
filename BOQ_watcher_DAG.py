@@ -5,9 +5,9 @@ import re
 
 import pendulum
 from airflow.providers.standard.operators.trigger_dagrun import TriggerDagRunOperator
-from airflow.sdk import dag,task
+from airflow.sdk import dag, task, Variable
 
-INPUT_FOLDER = "/mnt/c/Users/Usuario/Desktop/Pessoal/Data Engineering/Airflow/BOQ/Input"
+INPUT_FOLDER = Variable.get("BOQ_INPUT_FOLDER")
 MANIFEST_PATH = os.path.expanduser("~/airflow/data/boq_watcher_manifest.json")
 
 def _load_manifest():

@@ -7,7 +7,7 @@ import os
 from airflow.models import Param
 from airflow.providers.standard.operators.hitl import ApprovalOperator, HITLOperator
 from airflow.sdk.bases.hook import BaseHook
-from airflow.sdk import BaseNotifier, Context, dag, task, get_current_context
+from airflow.sdk import BaseNotifier, Context, dag, task, get_current_context, Variable
 
 
 
@@ -96,7 +96,7 @@ def bill_of_quantities():
         return project_name
 
 
-    WORKDIR = os.path.expanduser("~/airflow/data/boq_files")
+    WORKDIR = Variable.get("BOQ_WORKDIR")
 
     @task
     def convert_dwg_to_dxf(project_name):
@@ -109,7 +109,7 @@ def bill_of_quantities():
         context = get_current_context()
         run_id_safe = re.sub(r"[^A-Za-z0-9_.-]", "_", context["run_id"])
 
-        dwg_folder = "/mnt/c/Users/Usuario/Desktop/Pessoal/Data Engineering/Airflow/BOQ/Input"
+        dwg_folder = Variable.get("BOQ_INPUT_FOLDER")
         temp_folder = os.path.join(dwg_folder, "temp")
         output_folder = dwg_folder
 
@@ -448,7 +448,7 @@ def bill_of_quantities():
             pd.DataFrame(number_of_structures).to_excel(writer, sheet_name='Number of Structures', index=False)
 
 
-        main_dest_folder = "/mnt/c/Users/Usuario/Desktop/Pessoal/Data Engineering/Airflow/BOQ/Output"
+        main_dest_folder = Variable.get("BOQ_OUTPUT_FOLDER")
         dest_folder  = os.path.join(main_dest_folder, project_name)
         os.makedirs(dest_folder, exist_ok=True)
         dest_xlsx_path = os.path.join(dest_folder, filename)
