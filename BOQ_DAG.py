@@ -5,11 +5,10 @@ from datetime import datetime, timedelta
 import os
 
 from airflow.models import Param
-from airflow.providers.standard.operators.hitl import HITLEntryOperator, HITLOperator
+from airflow.providers.standard.operators.hitl import ApprovalOperator, HITLOperator
 from airflow.sdk.bases.hook import BaseHook
 from airflow.sdk import BaseNotifier, Context, dag, task, get_current_context
-from pip._internal.models import candidate
-from pygments.styles import default
+
 
 
 class LocalLogNotifier(BaseNotifier):
@@ -64,20 +63,16 @@ def close_db_connection(conn):
 @dag(
     dag_id='BOQ_DAG_weekly',
     start_date=pendulum.datetime(2026, 7, 21),
-    schedule="@weekly",
+    schedule=None,
     catchup=False,
     tags=['BOQ'],
     max_active_runs=1,
 )
 def bill_of_quantities():
-    """
-    DAG for extracting BOQ weekly data from .dwg file
-    :return:
-    """
-    wait_for_input = HITLEntryOperator(
+    """ DAG for extracting BOQ data weekly from .dwg file. """
+    wait_for_input = ApprovalOperator(
         task_id="wait_for_input",
-        subject="Please provide name of the project information: ",
-        params={"information": Param("", type="string")},
+        subject="Please confirm the project name: (detected: {{ dag_run.conf.get('detected_project_name', 'none') }})",
         notifiers=[hitl_request_callback],
         on_success_callback=hitl_success_callback,
         on_failure_callback=hitl_failure_callback,
@@ -85,18 +80,27 @@ def bill_of_quantities():
 
     @task
     def process_user_input(hitl_output=None):
-        """ Receives the user input from the HITL Operator. """
-        user_input = hitl_output["params_input"]["information"]
+        """ Uses the project name detected by the watcher, once a human has approved it. """
+        context = get_current_context()
+        project_name = context['dag_run'].conf.get("detected_project_name")
 
-        print(f"User provided: {user_input}")
+        if not project_name:
+            raise ValueError(
+                "No detected_project_name in dag_run.conf. Trigger this DAG with "
+                'conf={"detected_project_name": "..."} (either via the watcher, or '
+                "manually through the Airflow UI's trigger-with-config option)."
+            )
 
-        return user_input
+        print(f"Approved. Using project: {project_name}")
+
+        return project_name
 
 
     WORKDIR = os.path.expanduser("~/airflow/data/boq_files")
 
     @task
     def convert_dwg_to_dxf(project_name):
+        """ Converts the .dwg file to a .dxf file """
         import re
         import glob
         import shutil
@@ -176,6 +180,7 @@ def bill_of_quantities():
 
     @task
     def extract_data_from_dxf(dxf_path):
+        """ Extracts data from an .dxf file """
         import math
         import ezdxf
         from ezdxf.math import Vec3
@@ -254,10 +259,7 @@ def bill_of_quantities():
 
     @task
     def load_to_duckdb(data, project_name, rewrite=True):
-        """
-        Loads PV project into main database
-        If there is already data from the pv_project, it deletes old data and adds the new as there is no need to maintain old data.
-        """
+        """ Loads PV project into main database """
         conn = get_db_connection()
         try:
             df = pd.DataFrame(data)
@@ -330,7 +332,7 @@ def bill_of_quantities():
                     print(f"Project {project_name} already exists")
                     conn.execute("DELETE FROM cad_entities WHERE project_name = ?", [project_name])
                     print(f"Removed existing data for project: {project_name}")
-                elif existing == 0 and not rewrite:
+                elif existing > 0 and not rewrite:
                     print(f"Project {project_name} already exists")
                     print(f"Inserting more data for project: {project_name}")
 
@@ -354,11 +356,14 @@ def bill_of_quantities():
 
     @task
     def boq_transformations_structures(project_name):
+        """ Gets structure data (tracker or fixed structure) from the main database and returns the number of structures. """
         conn = get_db_connection(read_only=True)
         try:
-            tracker_data = conn.sql(
-                f"SELECT layer, X, Y, FROM cad_entities WHERE project_name='{project_name}' AND name ILIKE '%Tracker%'")
-            structure_df = tracker_data.fetchdf()
+            structure_data = conn.sql(
+                "SELECT layer, X, Y, FROM cad_entities WHERE project_name= ? AND (name ILIKE '%tracker%' OR name ILIKE '%string%')",
+                params=[project_name],
+            )
+            structure_df = structure_data.fetchdf()
             structure_df['Line'] = round(structure_df['X'],0)
 
             structure_df.sort_values(by=['Line','Y'], ascending=[True,False], inplace=True, ignore_index=True)
@@ -380,43 +385,33 @@ def bill_of_quantities():
 
     @task
     def boq_transformations_cables(project_name):
+        """ Gets cable data from the main database and returns a dictionary with the quantity in meters for each type of cable, the 10 longest DC cables and the number of ducts for each type. """
         conn = get_db_connection(read_only=True)
         try:
             cable_data = conn.sql(
-                f"SELECT layer, start_x, start_y, end_x, end_y, length FROM cad_entities WHERE project_name='{project_name}' AND layer ILIKE '%vala%' OR layer ILIKE '%cabo%' OR layer ILIKE '%eletroduto%'")
+                "SELECT layer, start_x, start_y, end_x, end_y, length FROM cad_entities WHERE project_name= ? AND (layer ILIKE '%vala%' OR layer ILIKE '%cabo%' OR layer ILIKE '%eletroduto%')",
+                params=[project_name],
+            )
 
-            ac_cables = conn.sql("""
-                SELECT layer, start_x, start_y, end_x, end_y, length FROM cable_data WHERE layer LIKE 'EMF_bt_vala_btca_%xC'
-            """)
+            cable_filters = [
+                ("AC Cables", "layer LIKE 'EMF_bt_vala_btca_%xC'"),
+                ("DC Cables", "layer = 'EMF_cabo_solar_negativo' OR layer = 'EMF_cabo_solar_positivo'"),
+                ("DC Ducts", "layer LIKE 'EMF_bt_eletroduto_%S'"),
+                ("DC Trenches", "layer LIKE 'EMF_vala_CC_%C'")
+            ]
 
-            dc_cables = conn.sql("""
-                SELECT layer, start_x, start_y, end_x, end_y, length FROM cable_data WHERE layer = 'EMF_cabo_solar_negativo' OR layer = 'EMF_cabo_solar_positivo'
-            """)
-
-            dc_ducts = conn.sql("""
-                SELECT layer, start_x, start_y, end_x, end_y, length FROM cable_data WHERE layer LIKE 'EMF_bt_eletroduto_%S'
-            """)
-
-            dc_trenches = conn.sql("""
-                SELECT layer, start_x, start_y, end_x, end_y, length FROM cable_data WHERE layer LIKE 'EMF_vala_CC_%C'
-            """)
-
-            ac_cables_group = conn.sql("SELECT layer,SUM(length) as total_length FROM 'ac_cables' GROUP BY layer ORDER BY layer")
-            dc_cables_group = conn.sql("SELECT layer,SUM(length) as total_length FROM 'dc_cables' GROUP BY layer ORDER BY layer")
-            longest_DC_cables = conn.sql("SELECT * FROM dc_cables ORDER BY length DESC LIMIT 10")
-            dc_ducts_group = conn.sql("SELECT layer,SUM(length) as total_length FROM 'dc_ducts' GROUP BY layer ORDER BY layer")
-            dc_ducts_count = conn.sql("SELECT layer, COUNT(layer) as count FROM 'dc_ducts' GROUP BY layer ORDER BY count DESC")
-            dc_trenches_group = conn.sql("SELECT layer,SUM(length) as total_length FROM 'dc_trenches' GROUP BY layer ORDER BY layer")
+            subsets = {}
+            processed_cable_data = {}
+            for sheet_name, layer_filter in cable_filters:
+                subset = cable_data.filter(layer_filter)
+                subsets[sheet_name] = subset
+                grouped = subset.aggregate("layer, SUM(length) AS total_length", "layer").order("layer")
+                processed_cable_data[sheet_name] = grouped.fetchdf().to_dict(orient='records')
 
 
-            processed_cable_data = {
-                'AC Cables': ac_cables_group.fetchdf().to_dict(orient='records'),
-                'DC Cables': dc_cables_group.fetchdf().to_dict(orient='records'),
-                'Longest DC Cables': longest_DC_cables.fetchdf().to_dict(orient='records'),
-                'DC Ducts': dc_ducts_group.fetchdf().to_dict(orient='records'),
-                'Qtd. DC Ducts': dc_ducts_count.fetchdf().to_dict(orient='records'),
-                'DC Trenches': dc_trenches_group.fetchdf().to_dict(orient='records'),
-            }
+            processed_cable_data['Longest DC Cables'] = subsets['DC Cables'].order("length DESC").to_dict(orient='records').limit(10).fetchdf().to_dict(orient='records')
+            processed_cable_data['Qtd. DC Cables'] = subsets['DC Ducts'].aggregate("layer, COUNT(layer) AS count", "layer").order("count DESC").fetchdf().to_dict(orient='records')
+
         finally:
             close_db_connection(conn)
 
@@ -425,6 +420,7 @@ def bill_of_quantities():
 
     @task
     def load_to_excel(number_of_structures, processed_cable_data, project_name):
+        """ Loads the cable dictionary and the number of structures into a single excel for external use. """
         import shutil
         import time
 
@@ -472,18 +468,18 @@ def bill_of_quantities():
 
 
     # Create task instances with their dependencies
-    user_input = process_user_input(wait_for_input.output)
-    dxf_file = convert_dwg_to_dxf(user_input)
+    project_name = process_user_input(wait_for_input.output)
+    dxf_file = convert_dwg_to_dxf(project_name)
     dwg_data = extract_data_from_dxf(dxf_file)
-    data_loaded = load_to_duckdb(dwg_data, user_input)
+    data_loaded = load_to_duckdb(dwg_data, project_name)
 
     # Set the chain
-    wait_for_input >> user_input >> dxf_file >> dwg_data >> data_loaded
+    wait_for_input >> project_name >> dxf_file >> dwg_data >> data_loaded
 
     # Create downstream tasks
-    structures = boq_transformations_structures(user_input)
-    cables = boq_transformations_cables(user_input)
-    final = load_to_excel(structures, cables, user_input)
+    structures = boq_transformations_structures(project_name)
+    cables = boq_transformations_cables(project_name)
+    final = load_to_excel(structures, cables, project_name)
 
     # Set dependencies
     data_loaded >> [structures, cables] >> final
