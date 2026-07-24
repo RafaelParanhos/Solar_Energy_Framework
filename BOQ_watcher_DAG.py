@@ -47,11 +47,9 @@ def boq_watcher():
         confs = []
         for filename in new_filenames:
             project_name = re.sub(r"\s*-\s*BOQ\.dwg$", "", filename)
-            confs.append({"detected_project_name": project_name})
-            seen.add(filename)
+            confs.append({"filename": filename, "detected_project_name": project_name})
             print(f"New file detected: {filename} -> project_name = {project_name}")
 
-        _save_manifest(seen)
         return confs
 
     new_file_confs = find_new_files()
@@ -60,5 +58,15 @@ def boq_watcher():
         task_id="trigger_main_dag",
         trigger_dag_id="BOQ_DAG",
     ).expand(conf=new_file_confs)
+
+    @task
+    def mark_seen(conf, _trigger_result):
+        """ Only mark the project as seen if the trigger_main_dag actually succeeded """
+        seen = _load_manifest()
+        seen.add(conf["filename"])
+        _save_manifest(seen)
+        print(f"Marked as seen: {conf['filename']}")
+
+    mark_seen.expand(conf=new_file_confs, _trigger_result=trigger_main_dag)
 
 BOQ_watcher_DAG = boq_watcher()
