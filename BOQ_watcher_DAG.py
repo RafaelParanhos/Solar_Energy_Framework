@@ -58,7 +58,7 @@ def boq_watcher():
 
     trigger_main_dag = TriggerDagRunOperator.partial(
         task_id="trigger_main_dag",
-        trigger_dag_id="BOQ_DAG_weekly",
+        trigger_dag_id="BOQ_DAG",
     ).expand(conf=new_file_confs)
 
 BOQ_watcher_DAG = boq_watcher()
