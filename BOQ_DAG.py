@@ -1,3 +1,4 @@
+import json
 import pendulum
 import pandas as pd
 import duckdb
@@ -464,6 +465,20 @@ def bill_of_quantities():
             )
 
         print(f"Report saved to {dest_xlsx_path}")
+
+        # Only reached once the whole pipeline has succeeded - marking this file as processed.
+        context = get_current_context()
+        filename = context['dag_run'].conf.get("filename")
+        if filename:
+            manifest_path = os.path.expanduser(Variable.get("WATCHER_MANIFEST"))
+            seen = set()
+            if os.path.exists(manifest_path):
+                with open(manifest_path) as f:
+                    seen = set(json.load(f))
+            seen.add(filename)
+            with open(manifest_path, "w") as f:
+                json.dump(sorted(seen), f)
+            print(f"Marked {filename} as seen")
 
 
 

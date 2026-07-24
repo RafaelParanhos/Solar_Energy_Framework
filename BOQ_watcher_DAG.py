@@ -5,10 +5,10 @@ import re
 
 import pendulum
 from airflow.providers.standard.operators.trigger_dagrun import TriggerDagRunOperator
-from airflow.sdk import dag, task, Variable
+from airflow.sdk import dag, task, Variable, get_current_context
 
 INPUT_FOLDER = Variable.get("BOQ_INPUT_FOLDER")
-MANIFEST_PATH = os.path.expanduser("~/airflow/data/boq_watcher_manifest.json")
+MANIFEST_PATH = os.path.expanduser(Variable.get("WATCHER_MANIFEST"))
 
 def _load_manifest():
     """ Returns the set of filenames we've already triggered a run for. """
@@ -58,15 +58,5 @@ def boq_watcher():
         task_id="trigger_main_dag",
         trigger_dag_id="BOQ_DAG",
     ).expand(conf=new_file_confs)
-
-    @task
-    def mark_seen(conf, _trigger_result):
-        """ Only mark the project as seen if the trigger_main_dag actually succeeded """
-        seen = _load_manifest()
-        seen.add(conf["filename"])
-        _save_manifest(seen)
-        print(f"Marked as seen: {conf['filename']}")
-
-    mark_seen.expand(conf=new_file_confs, _trigger_result=trigger_main_dag.output)
 
 BOQ_watcher_DAG = boq_watcher()
