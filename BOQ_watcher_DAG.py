@@ -67,6 +67,6 @@ def boq_watcher():
         _save_manifest(seen)
         print(f"Marked as seen: {conf['filename']}")
 
-    mark_seen.expand(conf=new_file_confs, _trigger_result=trigger_main_dag)
+    mark_seen.expand(conf=new_file_confs, _trigger_result=trigger_main_dag.output)
 
 BOQ_watcher_DAG = boq_watcher()
