@@ -61,7 +61,7 @@ def close_db_connection(conn):
 
 
 @dag(
-    dag_id='BOQ_DAG_weekly',
+    dag_id='BOQ_DAG',
     start_date=pendulum.datetime(2026, 7, 21),
     schedule=None,
     catchup=False,
@@ -69,7 +69,7 @@ def close_db_connection(conn):
     max_active_runs=1,
 )
 def bill_of_quantities():
-    """ DAG for extracting BOQ data weekly from .dwg file. """
+    """ DAG for extracting BOQ data from .dwg file. """
     wait_for_input = ApprovalOperator(
         task_id="wait_for_input",
         subject="Please confirm the project name: (detected: {{ dag_run.conf.get('detected_project_name', 'none') }})",
@@ -409,8 +409,8 @@ def bill_of_quantities():
                 processed_cable_data[sheet_name] = grouped.fetchdf().to_dict(orient='records')
 
 
-            processed_cable_data['Longest DC Cables'] = subsets['DC Cables'].order("length DESC").to_dict(orient='records').limit(10).fetchdf().to_dict(orient='records')
-            processed_cable_data['Qtd. DC Cables'] = subsets['DC Ducts'].aggregate("layer, COUNT(layer) AS count", "layer").order("count DESC").fetchdf().to_dict(orient='records')
+            processed_cable_data['Longest DC Cables'] = subsets['DC Cables'].order("length DESC").limit(10).fetchdf().to_dict(orient='records')
+            processed_cable_data['Qtd. DC Ducts'] = subsets['DC Ducts'].aggregate("layer, COUNT(layer) AS count", "layer").order("count DESC").fetchdf().to_dict(orient='records')
 
         finally:
             close_db_connection(conn)
@@ -484,6 +484,6 @@ def bill_of_quantities():
     # Set dependencies
     data_loaded >> [structures, cables] >> final
 
-BOQ_DAG_weekly = bill_of_quantities()
+BOQ_DAG = bill_of_quantities()
 
 
